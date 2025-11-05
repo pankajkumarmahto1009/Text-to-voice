@@ -261,7 +261,7 @@
                         const mimeType = part?.inlineData?.mimeType;
 
                         if (!audioData || !mimeType || !mimeType.startsWith("audio/")) {
-                            throw new Error("Received invalid or missing audio data from the API.");
+                            throw new Error("Received invalid or missing audio data from the API. Model may have failed to produce audio.");
                         }
 
                         // Extract sample rate from the mimeType string (e.g., audio/L16; rate=24000)
@@ -292,7 +292,7 @@
                         console.error(`Attempt ${attempt + 1} failed:`, error);
                         if (attempt < MAX_RETRIES - 1) {
                             const delay = Math.pow(2, attempt) * 1000 + Math.random() * 500;
-                            statusMessageEl.textContent = `Retrying in ${Math.round(delay / 1000)} seconds due to error...`;
+                            statusMessageEl.textContent = `Retrying in ${Math.round(delay / 1000)} seconds due to authorization issue...`;
                             await new Promise(resolve => setTimeout(resolve, delay));
                         } else {
                             throw error; // Throw on final failure, caught by outer catch
@@ -301,7 +301,9 @@
                 }
             } catch (error) {
                 // Catch the error thrown on the final failure and update the UI
-                const userFacingError = error.message.includes('API returned status') 
+                const userFacingError = error.message.includes('API returned status 403') 
+                    ? `API Error: The server rejected the request due to missing authorization. Please ensure the Text-to-Speech API is enabled and configured correctly for your environment.`
+                    : error.message.includes('API returned status') 
                     ? `API Error: ${error.message}`
                     : `Data Processing Error: ${error.message}`;
                     
