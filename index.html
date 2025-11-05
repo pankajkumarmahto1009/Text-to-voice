@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emotional TTS Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f7f9fb; }
+        .card { box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 5px 10px -5px rgba(0, 0, 0, 0.04); }
+        .btn-primary {
+            transition: all 0.2s;
+            background-image: linear-gradient(to right, #4c51bf, #6b46c1);
+        }
+        .btn-primary:hover {
+            background-image: linear-gradient(to right, #5a62c5, #7b58d6);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(76, 81, 191, 0.4);
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 sm:p-8 flex items-center justify-center">
+
+    <div id="app" class="w-full max-w-xl">
+        <div class="card bg-white p-6 sm:p-10 rounded-xl">
+            <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">Emotional Voice Studio</h1>
+            <p class="text-gray-500 mb-8 text-center">Use natural language to steer the tone and style of the generated speech.</p>
+
+            <!-- Text Input -->
+            <div class="mb-6">
+                <label for="textInput" class="block text-sm font-medium text-gray-700 mb-2">Text to Speak</label>
+                <textarea id="textInput" rows="4" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" placeholder="Type your script here..."></textarea>
+            </div>
+
+            <!-- Tone/Emotion Selection -->
+            <div class="mb-6">
+                <label for="toneInput" class="block text-sm font-medium text-gray-700 mb-2">Desired Tone/Emotion</label>
+                <select id="toneInput" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 bg-white">
+                    <option value="cheerful">Cheerful</option>
+                    <option value="angry">Angry</option>
+                    <option value="sad">Sad</option>
+                    <option value="excited">Excited</option>
+                    <option value="spooky whisper">Spooky Whisper</option>
+                    <option value="formal and informative">Formal and Informative</option>
+                    <option value="tired and bored">Tired and Bored</option>
+                    <option value="warm and friendly">Warm and Friendly</option>
+                </select>
+                <p class="text-xs text-gray-400 mt-1">This guides the model's emotional performance.</p>
+            </div>
+
+            <!-- Voice Selection -->
+            <div class="mb-8">
+                <label for="voiceSelect" class="block text-sm font-medium text-gray-700 mb-2">Speaker Voice</label>
+                <select id="voiceSelect" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 bg-white">
+                    <option value="Kore">Kore (Firm)</option>
+                    <option value="Puck">Puck (Upbeat)</option>
+                    <option value="Zephyr">Zephyr (Bright)</option>
+                    <option value="Charon">Charon (Informative)</option>
+                    <option value="Fenrir">Fenrir (Excitable)</option>
+                    <option value="Leda">Leda (Youthful)</option>
+                </select>
+            </div>
+
+            <!-- Generate Button -->
+            <button id="generateBtn" onclick="generateSpeech()" class="btn-primary w-full text-white font-semibold p-3 rounded-lg flex items-center justify-center">
+                <svg id="loadingSpinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Generate Voice
+            </button>
+
+            <!-- Status and Audio Output -->
+            <div id="statusMessage" class="mt-6 text-center text-sm font-medium text-indigo-600 min-h-[1.25rem]"></div>
+            
+            <div class="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <p class="text-sm font-medium text-gray-700 mb-2">Generated Audio:</p>
+                <audio id="audioPlayer" controls class="w-full" disabled></audio>
+            </div>
+            
+            <div class="mt-4 p-2 text-xs text-gray-500 bg-red-100 rounded-lg border border-red-300 hidden" id="errorBox">
+                <span class="font-semibold text-red-700">Generation Failed:</span> <span id="errorMessage" class="text-red-600"></span>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Global variables provided by the environment (required for setup, even if not used for storage)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        const apiKey = ""; // API key will be automatically provided by the environment during fetch
+
+        // Firebase Imports (Boilerplate for environment requirements)
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        let db, auth;
+
+        if (firebaseConfig) {
+            setLogLevel('Debug');
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+
+            // Authentication setup
+            const signIn = async () => {
+                try {
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                    console.log("Firebase authentication successful.");
+                } catch (error) {
+                    console.error("Firebase Auth Error:", error);
+                }
+            };
+            signIn();
+        }
+
+        const MODEL_NAME = "gemini-2.5-flash-preview-tts";
+        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
+        const MAX_RETRIES = 5;
+
+        const statusMessageEl = document.getElementById('statusMessage');
+        const generateBtn = document.getElementById('generateBtn');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const errorBox = document.getElementById('errorBox');
+        const errorMessageEl = document.getElementById('errorMessage');
+
+        /**
+         * Utility function to convert a base64 string to an ArrayBuffer.
+         * @param {string} base64 - The base64 string from the API response.
+         * @returns {ArrayBuffer}
+         */
+        function base64ToArrayBuffer(base64) {
+            try {
+                const binaryString = atob(base64);
+                const len = binaryString.length;
+                const bytes = new Uint8Array(len);
+                for (let i = 0; i < len; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                return bytes.buffer;
+            } catch (e) {
+                console.error("Error decoding base64:", e);
+                return null;
+            }
+        }
+
+        /**
+         * Converts raw 16-bit signed PCM audio data into a playable WAV Blob.
+         * The API returns audio/L16, which is raw PCM. We need to prepend a WAV header.
+         * @param {Int16Array} pcm16Array - The signed 16-bit PCM audio data.
+         * @param {number} sampleRate - The sample rate, typically 24000 Hz for this model.
+         * @returns {Blob} The WAV audio blob.
+         */
+        function pcmToWav(pcm16Array, sampleRate) {
+            const numChannels = 1;
+            const bitsPerSample = 16;
+            const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+            const blockAlign = numChannels * (bitsPerSample / 8);
+            const dataSize = pcm16Array.byteLength;
+            const buffer = new ArrayBuffer(44 + dataSize);
+            const view = new DataView(buffer);
+
+            // Helper function to write bytes (chunks)
+            function writeString(view, offset, string) {
+                for (let i = 0; i < string.length; i++) {
+                    view.setUint8(offset + i, string.charCodeAt(i));
+                }
+            }
+
+            // RIFF chunk descriptor
+            writeString(view, 0, 'RIFF'); // Chunk ID
+            view.setUint32(4, 36 + dataSize, true); // Chunk Size
+            writeString(view, 8, 'WAVE'); // Format
+
+            // FMT sub-chunk
+            writeString(view, 12, 'fmt '); // Sub-chunk 1 ID
+            view.setUint32(16, 16, true); // Sub-chunk 1 Size (16 for PCM)
+            view.setUint16(20, 1, true); // Audio Format (1 for PCM)
+            view.setUint16(22, numChannels, true); // Num Channels
+            view.setUint32(24, sampleRate, true); // Sample Rate
+            view.setUint32(28, byteRate, true); // Byte Rate
+            view.setUint16(32, blockAlign, true); // Block Align
+            view.setUint16(34, bitsPerSample, true); // Bits Per Sample
+
+            // DATA sub-chunk
+            writeString(view, 36, 'data'); // Sub-chunk 2 ID
+            view.setUint32(40, dataSize, true); // Sub-chunk 2 Size
+
+            // Write the PCM data (Int16Array)
+            const pcmBytes = new Int16Array(buffer, 44);
+            for (let i = 0; i < pcm16Array.length; i++) {
+                pcmBytes[i] = pcm16Array[i];
+            }
+
+            return new Blob([buffer], { type: 'audio/wav' });
+        }
+
+        window.generateSpeech = async function() {
+            const textToSynthesize = document.getElementById('textInput').value.trim();
+            const tone = document.getElementById('toneInput').value.trim();
+            const voice = document.getElementById('voiceSelect').value.trim();
+
+            errorBox.classList.add('hidden');
+            audioPlayer.disabled = true;
+            audioPlayer.removeAttribute('src');
+
+            if (textToSynthesize.length < 5) {
+                errorMessageEl.textContent = "Please enter at least 5 characters of text to synthesize.";
+                errorBox.classList.remove('hidden');
+                return;
+            }
+
+            // Construct the prompt to control emotion/style
+            const fullPrompt = `Say in a ${tone} voice: "${textToSynthesize}"`;
+
+            // Setup UI for loading state
+            generateBtn.disabled = true;
+            loadingSpinner.classList.remove('hidden');
+            generateBtn.textContent = 'Generating...';
+            statusMessageEl.textContent = 'Contacting AI voice model...';
+
+            const payload = {
+                contents: [{ parts: [{ text: fullPrompt }] }],
+                generationConfig: {
+                    responseModalities: ["AUDIO"],
+                    speechConfig: {
+                        voiceConfig: {
+                            prebuiltVoiceConfig: { voiceName: voice }
+                        }
+                    }
+                },
+                model: MODEL_NAME
+            };
+
+            try {
+                for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+                    try {
+                        const response = await fetch(API_URL, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+
+                        if (!response.ok) {
+                            const errorData = await response.json();
+                            // Provide detailed API error message
+                            throw new Error(`API returned status ${response.status}: ${errorData.error.message || 'Unknown API error'}`);
+                        }
+
+                        const result = await response.json();
+                        const part = result?.candidates?.[0]?.content?.parts?.[0];
+                        const audioData = part?.inlineData?.data;
+                        const mimeType = part?.inlineData?.mimeType;
+
+                        if (!audioData || !mimeType || !mimeType.startsWith("audio/")) {
+                            throw new Error("Received invalid or missing audio data from the API.");
+                        }
+
+                        // Extract sample rate from the mimeType string (e.g., audio/L16; rate=24000)
+                        const rateMatch = mimeType.match(/rate=(\d+)/);
+                        const sampleRate = rateMatch ? parseInt(rateMatch[1], 10) : 24000;
+                        
+                        statusMessageEl.textContent = 'Processing raw audio data...';
+
+                        // 1. Convert Base64 to ArrayBuffer
+                        const pcmDataBuffer = base64ToArrayBuffer(audioData);
+                        if (!pcmDataBuffer) throw new Error("Failed to decode base64 audio data.");
+
+                        // 2. The API returns signed PCM16 audio data.
+                        const pcm16 = new Int16Array(pcmDataBuffer);
+
+                        // 3. Convert PCM to WAV Blob
+                        const wavBlob = pcmToWav(pcm16, sampleRate);
+                        const audioUrl = URL.createObjectURL(wavBlob);
+
+                        // 4. Update the audio player
+                        audioPlayer.src = audioUrl;
+                        audioPlayer.disabled = false;
+                        audioPlayer.play();
+                        
+                        statusMessageEl.textContent = 'Audio generated and ready to play!';
+                        return; // Success, exit try block and function
+                    } catch (error) {
+                        console.error(`Attempt ${attempt + 1} failed:`, error);
+                        if (attempt < MAX_RETRIES - 1) {
+                            const delay = Math.pow(2, attempt) * 1000 + Math.random() * 500;
+                            statusMessageEl.textContent = `Retrying in ${Math.round(delay / 1000)} seconds due to error...`;
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                        } else {
+                            throw error; // Throw on final failure, caught by outer catch
+                        }
+                    }
+                }
+            } catch (error) {
+                // Catch the error thrown on the final failure and update the UI
+                const userFacingError = error.message.includes('API returned status') 
+                    ? `API Error: ${error.message}`
+                    : `Data Processing Error: ${error.message}`;
+                    
+                errorMessageEl.textContent = userFacingError;
+                errorBox.classList.remove('hidden');
+                statusMessageEl.textContent = 'Failed to generate audio. See error box for details.';
+                console.error("Final TTS generation failed:", error);
+            } finally {
+                // Always reset the button state
+                generateBtn.disabled = false;
+                loadingSpinner.classList.add('hidden');
+                generateBtn.textContent = 'Generate Voice';
+            }
+        }
+    </script>
+</body>
+</html>
+
